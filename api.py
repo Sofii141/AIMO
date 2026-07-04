@@ -31,6 +31,7 @@ Endpoints:
 import json
 import sys
 import os
+from turtle import mode
 from dotenv import load_dotenv
 
 from flask import Flask, request, jsonify
@@ -51,8 +52,12 @@ from src.logger import get_logger
 
 logger = get_logger("aimo.api")
 
-app = Flask(__name__)
 
+# PELIGRO REVISAR: valor puede ser 1 para persistir sesiones en disco (data/sessions/), valor en 0 o otro valor no persistirá sesiones.
+session_persist = 0 
+
+app = Flask(__name__)
+ 
 CORS(app,
      origins=["http://localhost:3000", "http://localhost:5173",
               "https://aimo-amber.vercel.app", "https://aimo-production-c6ad.up.railway.app"],
@@ -162,7 +167,8 @@ def chat():
         compresion_activada=compresion,
         moderacion=mod_record_inter,
     )
-    guardar_sesion(session["academic_record"])
+    if session_persist == 1:
+        guardar_sesion(session["academic_record"])
 
     if not is_complete:
         _sessions[session_id] = session
@@ -221,7 +227,8 @@ def chat():
         evaluacion_final,
         moderacion_final=mod_record_final,
     )
-    guardar_sesion(session["academic_record"])
+    if session_persist == 1:
+        guardar_sesion(session["academic_record"])
 
     session["phase"] = "complete"
     _sessions[session_id] = session
