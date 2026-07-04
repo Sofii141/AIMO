@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { Star, BarChart3, ShieldAlert, Diamond, Circle } from 'lucide-react'
+import Modal from './Modal'
 
 /**
  * AdminPanel — Research panel with two tabs:
- *   📊 MÉTRICAS  — AERI + G-Eval scores per turn
- *   🧠 EMOCIONES — Emotional classification per turn
+ *   MÉTRICAS — AERI + G-Eval scores per turn
+ *   RIESGO   — Clinical risk classification per turn
  */
 
 // ── Metrics tab ───────────────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ function EvalCard({ turn, evaluation, text }) {
       <div className="ap-card-hdr">
         <span className="ap-turn">TURNO {turn}</span>
         <div className="ap-composite-wrap">
-          <span className="ap-composite-label">◆ SCORE COMPUESTO</span>
+          <span className="ap-composite-label"><Diamond size={11} aria-hidden /> SCORE COMPUESTO</span>
           <span className="ap-composite-score">{composite}<span className="ap-den">/5</span></span>
         </div>
       </div>
@@ -84,9 +86,9 @@ function EvalCard({ turn, evaluation, text }) {
 // ── Risk tab ──────────────────────────────────────────────────────────────────
 
 const RISK_META = {
-  low:    { cls: 'risk-low',    label: 'BAJO',  emoji: '🟢' },
-  medium: { cls: 'risk-medium', label: 'MEDIO', emoji: '🟡' },
-  high:   { cls: 'risk-high',   label: 'ALTO',  emoji: '🔴' },
+  low:    { cls: 'risk-low',    label: 'BAJO',  color: '#22c55e' },
+  medium: { cls: 'risk-medium', label: 'MEDIO', color: '#eab308' },
+  high:   { cls: 'risk-high',   label: 'ALTO',  color: '#ef4444' },
 }
 
 const ACTION_META = {
@@ -116,7 +118,7 @@ function RiskCard({ turn, classification, text }) {
         <div className="em-field">
           <span className="em-label">NIVEL DE RIESGO</span>
           <span className={`em-badge ${risk.cls}`}>
-            {risk.emoji} {risk.label}
+            <Circle size={11} fill={risk.color} color={risk.color} aria-hidden /> {risk.label}
           </span>
         </div>
       </div>
@@ -151,26 +153,27 @@ export default function AdminPanel({ messages, onClose }) {
     .filter(e => e.classification)
 
   return (
-    <div className="ap-overlay" onClick={onClose}>
-      <div className="ap-panel admin-panel" onClick={e => e.stopPropagation()} role="dialog" aria-label="Panel de métricas">
-        <div className="ap-header">
-          <span className="ap-title">⭐ PANEL ADMIN — INVESTIGACIÓN</span>
-          <button className="ap-close" onClick={onClose} aria-label="Cerrar panel">✕</button>
-        </div>
-
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={<><Star size={15} aria-hidden /> PANEL ADMIN — INVESTIGACIÓN</>}
+      ariaLabel="Panel de métricas"
+      panelClassName="ap-panel admin-panel"
+      closeAriaLabel="Cerrar panel"
+    >
         {/* Tabs */}
         <div className="ap-tabs">
           <button
             className={`ap-tab${activeTab === 'metricas' ? ' ap-tab-active' : ''}`}
             onClick={() => setActiveTab('metricas')}
           >
-            📊 MÉTRICAS {evals.length > 0 && `(${evals.length})`}
+            <BarChart3 size={13} aria-hidden /> MÉTRICAS {evals.length > 0 && `(${evals.length})`}
           </button>
           <button
             className={`ap-tab${activeTab === 'riesgo' ? ' ap-tab-active' : ''}`}
             onClick={() => setActiveTab('riesgo')}
           >
-            🔎 RIESGO {risks.length > 0 && `(${risks.length})`}
+            <ShieldAlert size={13} aria-hidden /> RIESGO {risks.length > 0 && `(${risks.length})`}
           </button>
         </div>
 
@@ -179,19 +182,12 @@ export default function AdminPanel({ messages, onClose }) {
           {activeTab === 'metricas' && (
             <>
               <div className="ap-info-banner" style={{ marginTop: 0 }}>
-                <span>📊 AERI (Lee &amp; Yi, 2023) · Relevance · Semantically Appropriate · Pesos: Davis (1980) + Abd-alrazaq (2019)</span>
-              </div>
-
-              <div className="ap-alert-box">
-                <span className="ap-alert-title">¡Empathic Concern (EC) eliminada!</span>
-                <p className="ap-alert-text">
-                  La métrica <em>Semantically Appropriate</em> es su superconjunto — cubre calidez empática + seguridad psicológica + ausencia de positividad tóxica.
-                </p>
+                <span><BarChart3 size={12} aria-hidden /> AERI (Lee &amp; Yi, 2023) · Relevance · Semantically Appropriate · Pesos: Davis (1980) + Abd-alrazaq (2019)</span>
               </div>
 
               {evals.length === 0 ? (
                 <div className="ap-empty">
-                  <span>⭐</span>
+                  <span><Star size={32} aria-hidden /></span>
                   <p>No hay evaluaciones aún.<br />Conversa con AIMO para ver<br />las métricas aquí.</p>
                 </div>
               ) : (
@@ -205,12 +201,12 @@ export default function AdminPanel({ messages, onClose }) {
           {activeTab === 'riesgo' && (
             <>
               <div className="ap-info-banner" style={{ marginTop: 0 }}>
-                <span>🔎 Clasificación de riesgo clínico · SPRC (2014) · WHO-DAS (2010) · aimo_classifier</span>
+                <span><ShieldAlert size={12} aria-hidden /> Clasificación de riesgo clínico · SPRC (2014) · WHO-DAS (2010) · aimo_classifier</span>
               </div>
 
               {risks.length === 0 ? (
                 <div className="ap-empty">
-                  <span>🔎</span>
+                  <span><ShieldAlert size={32} aria-hidden /></span>
                   <p>La clasificación de riesgo<br />aparecerá al finalizar<br />la conversación.</p>
                 </div>
               ) : (
@@ -222,8 +218,6 @@ export default function AdminPanel({ messages, onClose }) {
           )}
 
         </div>
-
-      </div>
-    </div>
+    </Modal>
   )
 }

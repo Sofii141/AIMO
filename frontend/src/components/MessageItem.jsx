@@ -1,17 +1,48 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { useTypewriter } from "../hooks/useTypewriter";
 
 const TYPEWRITER_SPEED = 18; // ms per character — fast but readable
 
-// Simple inline markdown renderer: **bold**, line breaks, numbered lists
+// Detecta URLs http(s) para convertirlas en enlaces clicables.
+const URL_RE = /(https?:\/\/[^\s]+)/g;
+
+// Convierte las URLs de un fragmento de texto plano en enlaces que abren
+// en una pestaña nueva. El resto del texto se mantiene igual.
+function linkify(text, keyPrefix) {
+  return text.split(URL_RE).map((part, i) => {
+    if (URL_RE.test(part)) {
+      URL_RE.lastIndex = 0; // el flag /g mantiene estado entre .test()
+      return (
+        <a
+          key={`${keyPrefix}-${i}`}
+          className="msg-link"
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+// Línea compuesta solo por --- , *** o ___ (separadores del prompt).
+const HR_RE = /^(-{3,}|\*{3,}|_{3,})$/;
+
+// Simple inline markdown renderer: **bold**, links, line breaks
 function renderMarkdown(text) {
   return text.split("\n").map((line, lineIdx) => {
+    // Ocultar las líneas separadoras (---) que vienen del prompt
+    if (HR_RE.test(line.trim())) return null;
     // Split on **...** pairs
     const parts = line.split(/(\*\*[^*]+\*\*)/g);
     const rendered = parts.map((part, i) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return <strong key={i}>{part.slice(2, -2)}</strong>;
       }
-      return part;
+      return linkify(part, `${lineIdx}-${i}`);
     });
     return (
       <span key={lineIdx}>
@@ -24,46 +55,26 @@ function renderMarkdown(text) {
 
 export default function MessageItem({ message, isTyping, onTypingDone, className = "" }) {
   const isUser = message.role === "user";
-  const [displayed, setDisplayed] = useState(
-    isTyping ? "" : message.text
-  );
-  const timerRef = useRef(null);
-  const doneCalledRef = useRef(false);
+  // Typewriter driven by the shared hook (handles its own cleanup on unmount).
+  const { displayed, type } = useTypewriter();
   // Ref attached to this bubble — used for continuous scroll while typing
   const bubbleRef = useRef(null);
 
+  // While this message is the "typing" one, animate it; otherwise render full text.
   useEffect(() => {
-    if (!isTyping) {
-      setDisplayed(message.text);
-      return;
+    if (isTyping) {
+      type(message.text, TYPEWRITER_SPEED, onTypingDone);
     }
-
-    setDisplayed("");
-    doneCalledRef.current = false;
-    let i = 0;
-    const text = message.text;
-
-    timerRef.current = setInterval(() => {
-      i += 1;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) {
-        clearInterval(timerRef.current);
-        if (!doneCalledRef.current) {
-          doneCalledRef.current = true;
-          onTypingDone?.();
-        }
-      }
-    }, TYPEWRITER_SPEED);
-
-    return () => clearInterval(timerRef.current);
   }, [isTyping]); // eslint-disable-line
+
+  const text = isTyping ? displayed : message.text;
 
   // Scroll this bubble into view on every character while typing
   useEffect(() => {
     if (isTyping && bubbleRef.current) {
       bubbleRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [displayed, isTyping]);
+  }, [text, isTyping]);
 
   return (
     <article
@@ -74,7 +85,7 @@ export default function MessageItem({ message, isTyping, onTypingDone, className
         className={`msg-item-text msg-pixel-bubble ${isUser ? "bubble-user" : "bubble-aimo"}`}
       >
         <span className="msg-role-prefix">{isUser ? "[ TÚ ]" : "[ AIMO ]"}</span>{" "}
-        {renderMarkdown(displayed)}
+        {renderMarkdown(text)}
         {isTyping && <span className="tw-cursor" aria-hidden>_</span>}
       </p>
     </article>

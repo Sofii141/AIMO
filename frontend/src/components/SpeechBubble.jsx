@@ -1,9 +1,10 @@
 /**
  * SpeechBubble
  *
- * Muestra siempre el texto de presentación de AIMO quemado.
- * Cuando la fase es "loading", superpone los tres puntos animados
- * sobre el texto (no lo reemplaza) para indicar que AIMO está pensando.
+ * Muestra el texto de presentación de AIMO quemado.
+ * Cuando la fase es "loading", oculta el texto (conservando su espacio para
+ * no cambiar el tamaño de la burbuja) y muestra los tres puntos animados
+ * centrados para indicar que AIMO está pensando.
  *
  * Props:
  *   phase: string — fase actual del juego ("intro" | "user_turn" | "loading" | "responding")
@@ -21,8 +22,11 @@ export default function SpeechBubble({ phase }) {
       role="status"
       aria-live="polite"
     >
-      {/* Texto quemado: siempre visible */}
-      <span className={`bubble-static-text${isLoading ? " bubble-text-dimmed" : ""}`}>
+      {/* Texto quemado: se oculta (sin perder su espacio) mientras piensa */}
+      <span
+        className={`bubble-static-text${isLoading ? " bubble-text-hidden" : ""}`}
+        aria-hidden={isLoading}
+      >
         {STATIC_TEXT}
       </span>
 

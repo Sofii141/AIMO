@@ -2,7 +2,7 @@
  * App — Componente raíz de AIMO.
  *
  * Gestiona el flujo de fases de la conversación, el historial de mensajes,
- * y los modales de investigación (AdminPanel, ThinkLog, RecommendationsModal).
+ * y los modales de investigación (AdminPanel, RecommendationsModal).
  *
  * Fases:
  *   intro      — pausa inicial antes de habilitar el input
@@ -18,8 +18,9 @@ import SpeechBubble from "./components/SpeechBubble";
 import MessageItem from "./components/MessageItem";
 import UserInput from "./components/UserInput";
 import AdminPanel from "./components/AdminPanel";
-import ThinkLog from "./components/ThinkLog";
 import RecommendationsModal from "./components/RecommendationsModal";
+import { RotateCcw, Star, Sparkles, AlertTriangle } from "lucide-react";
+import { sendMessage, resetSession, ApiError } from "./services/api";
 import "./App.css";
 
 const PHASES = {
@@ -30,14 +31,37 @@ const PHASES = {
   COMPLETE: "complete",
 };
 
-const USE_API = true;
+/**
+ * Modo mock controlado por env. Si VITE_USE_MOCK === 'true' se usan respuestas
+ * simuladas; por defecto (ausencia o cualquier otro valor) se llama al API real.
+ */
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
-/** Respuesta mock para desarrollo sin backend */
+/**
+ * Disclaimers éticos/legales de la UI. Cada uno es fuente única para los lugares
+ * que deben decir lo mismo, sin forzar que todos usen el mismo texto:
+ *   FULL  — versión completa bajo el personaje.
+ *   SHORT — versión compacta para el título del chat y el footer.
+ */
+const DISCLAIMER_FULL =
+  "AIMO puede cometer errores. Sus respuestas son orientativas y no reemplazan la atención de un profesional de salud mental.";
+const DISCLAIMER_SHORT =
+  "AIMO puede cometer errores · No reemplaza a un profesional de salud mental";
+
+/**
+ * Respuesta mock para desarrollo sin backend (VITE_USE_MOCK=true).
+ * Refleja el contrato real que consume el resto de la app: métricas AERI
+ * actuales (relevance + semantically_appropriate, sin empathic_concern),
+ * clasificación de riesgo/emoción, cadena de pensamiento y cierre de pipeline
+ * con recomendaciones — para que AdminPanel y RecommendationsModal
+ * se vean completos.
+ */
 function mockResponse() {
   return {
     response:
       "Escucho que estás cargando algo que pesa. No tienes que enfrentarlo solo. ¿Qué es lo que sientes con más fuerza ahora mismo?",
     evaluation: {
+      composite_score: 3.9,
       perspective_taking: {
         score: 4,
         justification:
@@ -47,23 +71,44 @@ function mockResponse() {
         score: 3,
         justification: "La respuesta usa lenguaje empático funcional.",
       },
-      empathic_concern: {
-        score: 5,
-        justification:
-          '"No tienes que enfrentarlo solo" transmite calidez genuina.',
-      },
       personal_distress: {
-        score: 1,
-        justification: "El agente mantiene compostura total.",
+        score: 2,
+        justification:
+          "El agente mantiene la compostura, con mínima reactividad emocional.",
+      },
+      relevance: {
+        score: 4,
+        justification:
+          "La respuesta se mantiene en el tema que trae el usuario y lo profundiza.",
+      },
+      semantically_appropriate: {
+        score: 4,
+        justification:
+          "Transmite calidez y seguridad psicológica, sin positividad tóxica.",
       },
     },
+    classification: {
+      emotion: "sadness",
+      intensity: 3,
+      crisis_signal: false,
+      risk_level: "medium",
+      signals: [
+        "Menciona sentir una carga emocional sostenida",
+        "Lenguaje que sugiere sentirse sobrepasado",
+      ],
+      recommended_action: "caution",
+    },
+    pipeline_complete: true,
+    recommendations:
+      "Basado en lo que compartiste, aquí tienes algunas ideas para esta semana:\n\n" +
+      "1. Habla con alguien de confianza sobre lo que estás sintiendo.\n" +
+      "2. Prueba una pausa breve de respiración cuando la carga se sienta intensa.\n" +
+      "3. Considera agendar una cita con un profesional de salud mental.\n\n" +
+      "Recuerda: pedir ayuda es un acto de fuerza, no de debilidad. No estás solo en esto.",
   };
 }
 
 export default function App() {
-  // ── API Base URL ───────────────────────────────────────────────────────────
-  const API_BASE = import.meta.env.VITE_API_URL || '';
-
   // ── Estado de la conversación ──────────────────────────────────────────────
   const [phase,          setPhase]          = useState(PHASES.INTRO);
   const [messages,       setMessages]       = useState([]);
@@ -71,7 +116,6 @@ export default function App() {
 
   // ── Estado de modales ──────────────────────────────────────────────────────
   const [adminOpen,        setAdminOpen]        = useState(false);
-  const [thinkOpen,        setThinkOpen]        = useState(false);
   const [recsOpen,         setRecsOpen]         = useState(false);
 
   // ── Estado del pipeline (añadido por compañeros) ───────────────────────────
@@ -79,6 +123,8 @@ export default function App() {
   const [finalRecs,        setFinalRecs]        = useState(null);
   /** true cuando el backend indica que la conversación ha terminado */
   const [pipelineComplete, setPipelineComplete] = useState(false);
+  /** Aviso sutil cuando el reset del backend no se pudo confirmar */
+  const [resetWarning,     setResetWarning]     = useState(false);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const sessionId      = useRef(`s_${Date.now()}`);
@@ -105,20 +151,11 @@ export default function App() {
 
     try {
       let data;
-      if (USE_API) {
-        const res = await fetch(`${API_BASE}/api/chat`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message:    userMsg,
-            session_id: sessionId.current,
-          }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        data = await res.json();
-      } else {
+      if (USE_MOCK) {
         await new Promise((r) => setTimeout(r, 1800));
         data = mockResponse();
+      } else {
+        data = await sendMessage(userMsg, sessionId.current);
       }
 
       const newMsg = {
@@ -126,7 +163,6 @@ export default function App() {
         text:           data.response,
         evaluation:     data.evaluation     ?? null,
         classification: data.classification ?? null,  // clasificación de riesgo (compañeros)
-        thinking:       data.thinking       ?? null,  // cadena de pensamiento <think> (compañeros)
       };
 
       setMessages((prev) => {
@@ -145,8 +181,11 @@ export default function App() {
 
     } catch (err) {
       console.error("[AIMO]", err);
-      const errMsg =
-        "¡Ups! Tuve un problema de conexión. ¿Puedes intentarlo de nuevo?";
+      // El servidor respondió pero con error (HTTP) vs. no hubo conexión/timeout.
+      const isServerError = err instanceof ApiError && err.kind === "http";
+      const errMsg = isServerError
+        ? "¡Ups! Mis servidores tuvieron un problema procesando tu mensaje. Dame un momento e inténtalo otra vez."
+        : "¡Ups! No pude conectarme (parece un problema de conexión o tardé demasiado). ¿Puedes intentarlo de nuevo?";
       setMessages((prev) => {
         const next = [...prev, { role: "aimo", text: errMsg }];
         setTypingMsgIndex(next.length - 1);
@@ -163,15 +202,15 @@ export default function App() {
   };
 
   const handleReset = async () => {
-    if (USE_API) {
+    setResetWarning(false);
+    if (!USE_MOCK) {
       try {
-        await fetch(`${API_BASE}/api/reset`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId.current }),
-        });
+        await resetSession(sessionId.current);
       } catch (err) {
         console.error("[AIMO reset]", err);
+        // El reset local sigue adelante, pero avisamos que el backend no confirmó.
+        setResetWarning(true);
+        setTimeout(() => setResetWarning(false), 6000);
       }
     }
     sessionId.current = `s_${Date.now()}`;
@@ -207,17 +246,8 @@ export default function App() {
             onClick={handleReset}
             aria-label="Reiniciar conversación"
           >
-            <span className="admin-icon">↺</span>
+            <span className="admin-icon"><RotateCcw size={14} aria-hidden /></span>
             <span className="admin-label">REINICIAR</span>
-          </button>
-
-          <button
-            className="hud-btn"
-            onClick={() => setThinkOpen(true)}
-            aria-label="Cadena de pensamiento"
-          >
-            <span className="admin-icon">💭</span>
-            <span className="admin-label">THINK</span>
           </button>
 
           <button
@@ -225,7 +255,7 @@ export default function App() {
             onClick={() => setAdminOpen(true)}
             aria-label="Panel de métricas AERI"
           >
-            <span className="admin-icon">⭐</span>
+            <span className="admin-icon"><Star size={14} aria-hidden /></span>
             <span className="admin-label">ADMIN</span>
             {evalCount > 0 && <span className="admin-badge">{evalCount}</span>}
           </button>
@@ -239,17 +269,13 @@ export default function App() {
             <SpeechBubble phase={phase} />
           </div>
           <AimoCharacter phase={phase} />
-          <p className="aimo-disclaimer">
-            AIMO puede cometer errores. Sus respuestas son orientativas y no reemplazan la atención de un profesional de salud mental.
-          </p>
+          <p className="aimo-disclaimer">{DISCLAIMER_FULL}</p>
         </section>
 
         <section className="chat-col">
           <div className="chat-title">
             <span className="chat-title-label">CONVERSACIÓN</span>
-            <span className="chat-title-disclaimer">
-              AIMO puede cometer errores · No reemplaza a un profesional
-            </span>
+            <span className="chat-title-disclaimer">{DISCLAIMER_SHORT}</span>
           </div>
           <div className="chat-scroll" role="log" aria-live="polite">
             {messages.length === 0 ? (
@@ -287,16 +313,10 @@ export default function App() {
           complete={isComplete}
           onSend={handleSend}
         />
-        <p className="footer-disclaimer">
-          AIMO puede cometer errores · No reemplaza a un profesional de salud mental
-        </p>
+        <p className="footer-disclaimer">{DISCLAIMER_SHORT}</p>
       </footer>
 
       {/* ── Modales de investigación ── */}
-      {thinkOpen && (
-        <ThinkLog messages={messages} onClose={() => setThinkOpen(false)} />
-      )}
-
       {adminOpen && (
         <AdminPanel messages={messages} onClose={() => setAdminOpen(false)} />
       )}
@@ -308,6 +328,13 @@ export default function App() {
         />
       )}
 
+      {/* Aviso sutil: el reset local se hizo, pero el backend no confirmó */}
+      {resetWarning && (
+        <div className="reset-warning-toast" role="status" aria-live="polite">
+          <AlertTriangle size={14} aria-hidden /> Se reinició la conversación aquí, pero el servidor pudo no completar el reinicio.
+        </div>
+      )}
+
       {/* Botón flotante para reabrir recomendaciones tras cerrar el modal */}
       {pipelineComplete && !recsOpen && (
         <button
@@ -315,7 +342,7 @@ export default function App() {
           onClick={() => setRecsOpen(true)}
           aria-label="Ver recomendaciones"
         >
-          ★ VER RECOMENDACIONES
+          <Sparkles size={14} aria-hidden /> VER RECOMENDACIONES
         </button>
       )}
     </div>

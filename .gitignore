@@ -20,7 +20,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
+venv
 # caches
 .pytest_cache/
 .mypy_cache/
@@ -45,3 +45,4 @@ Thumbs.db
 .github/
 
 .src/__pycache__/
+data
