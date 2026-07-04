@@ -54,7 +54,10 @@ logger = get_logger("aimo.api")
 
 
 # PELIGRO REVISAR: valor puede ser 1 para persistir sesiones en disco (data/sessions/), valor en 0 o otro valor no persistirá sesiones.
-session_persist = 0 
+session_persist = 0
+
+# PELIGRO REVISAR: valor puede ser 1 para activar la evaluación de las respuestas (GPT-3.5 intermedia y GPT-4 final), valor en 0 o otro valor desactiva ambas evaluaciones.
+session_evaluate = 0
 
 app = Flask(__name__)
  
@@ -148,7 +151,7 @@ def chat():
 
     # ── Intermediate evaluation (GPT-3.5-turbo) ───────────────────────────────
     evaluacion_intermedia = None
-    if es_segura_inter:
+    if session_evaluate == 1 and es_segura_inter:
         # Only evaluate if the response was not replaced by the fallback
         try:
             evaluacion_intermedia = evaluar_turno_contexto(mensaje, visible_response, turno_num)
@@ -200,7 +203,7 @@ def chat():
 
     # ── Final evaluation (GPT-4, low/medium risk, only if response safe) ─────
     evaluacion_final = None
-    if clasificacion.get("risk_level") != "high" and es_segura_final:
+    if session_evaluate == 1 and clasificacion.get("risk_level") != "high" and es_segura_final:
         try:
             context_str       = json.dumps(
                 {k: v for k, v in context_data.items() if k != 'complete'},

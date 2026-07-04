@@ -38,9 +38,10 @@ except Exception as e:
 # ==========================================
 # CONFIGURACIÓN DEL MODELO GROQ Y PARÁMETROS BASE
 # ==========================================
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "openai/gpt-oss-120b"
 
 DEFAULT_PARAMS = {
+    "temperature":          0.9,
     "model":                MODEL_NAME,
     "max_completion_tokens": 4096,
     "top_p":                0.95,

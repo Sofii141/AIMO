@@ -6,7 +6,7 @@ Generates personalized, empathetic recommendations for the student based on:
   - The clinical risk classification from agente_clasificador
 
 Routing by risk level:
-  - LOW    → Groq LLaMA (llama-3.3-70b-versatile)
+  - LOW    → Groq LLaMA (openai/gpt-oss-120b)
   - MEDIUM → AWS Bedrock (configured via BEDROCK_MODEL_ID)
   - HIGH   → Groq LLaMA, brief message directing to university appointment page
 """
