@@ -584,52 +584,6 @@ body,
   }
 }
 
-.eye-white {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: blink-eye 5.2s ease-in-out infinite;
-}
-
-.right-eye {
-  animation-delay: 0.08s;
-}
-
-@keyframes blink-eye {
-
-  0%,
-  82%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  88%,
-  92% {
-    transform: scaleY(0.08);
-  }
-}
-
-.screen-glow {
-  fill: var(--accent);
-  fill-opacity: 0.72;
-}
-
-.aimo-svg .aimo-arm-rest,
-.aimo-svg .aimo-arm-wave {
-  transition: opacity 0.3s ease;
-}
-
-.aimo-svg .aimo-arm-wave {
-  opacity: 0;
-}
-
-.phase-responding .aimo-svg .aimo-arm-rest {
-  opacity: 0;
-}
-
-.phase-responding .aimo-svg .aimo-arm-wave {
-  opacity: 1;
-}
-
 .aimo-ground-shadow {
   width: 112px;
   height: 14px;
